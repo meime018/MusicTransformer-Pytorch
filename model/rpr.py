@@ -31,12 +31,12 @@ class TransformerEncoderRPR(Module):
         self.num_layers = num_layers
         self.norm = norm
 
-    def forward(self, src, mask=None, src_key_padding_mask=None):
+    def forward(self, src, mask=None, src_key_padding_mask=None,is_causal=None):
 
         output = src
-
+        
         for i in range(self.num_layers):
-            output = self.layers[i](output, src_mask=mask,
+            output = self.layers[i](output, src_mask=mask,is_causal=is_causal,
                                     src_key_padding_mask=src_key_padding_mask)
 
         if self.norm:
@@ -71,15 +71,76 @@ class TransformerEncoderLayerRPR(Module):
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
 
-    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+    def forward(self, src, src_mask=None, src_key_padding_mask=None,is_causal=False):
         src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask)[0]
+                              key_padding_mask=src_key_padding_mask,is_causal=is_causal)[0]
         src = src + self.dropout1(src2)
         src = self.norm1(src)
         src2 = self.linear2(self.dropout(F.relu(self.linear1(src))))
         src = src + self.dropout2(src2)
         src = self.norm2(src)
         return src
+
+class TransformerDecoderRPR(Module):
+    """
+    Transformer Decoder with Relative Position Representations (RPR)
+    """
+
+    def __init__(self, decoder_layer, num_layers, norm=None):
+        super(TransformerDecoderRPR, self).__init__()
+        self.layers = _get_clones(decoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+
+    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
+                tgt_key_padding_mask=None, memory_key_padding_mask=None):
+        output = tgt
+
+        for layer in self.layers:
+            output = layer(output, memory, tgt_mask, memory_mask, 
+                           tgt_key_padding_mask, memory_key_padding_mask)
+
+        if self.norm:
+            output = self.norm(output)
+
+        return output
+
+class TransformerDecoderLayerRPR(Module):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, er_len=None):
+        super(TransformerDecoderLayerRPR, self).__init__()
+        self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
+        self.multihead_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
+        # Implementation of Feedforward model
+        self.linear1 = Linear(d_model, dim_feedforward)
+        self.dropout = Dropout(dropout)
+        self.linear2 = Linear(dim_feedforward, d_model)
+
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+        self.norm3 = LayerNorm(d_model)
+        self.dropout1 = Dropout(dropout)
+        self.dropout2 = Dropout(dropout)
+        self.dropout3 = Dropout(dropout)
+
+    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
+                tgt_key_padding_mask=None, memory_key_padding_mask=None, is_causal=False):
+        # Self attention handles the inputs from the decoder itself
+        tgt2 = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask, 
+                              key_padding_mask=tgt_key_padding_mask, is_causal=is_causal)[0]
+        tgt = tgt + self.dropout1(tgt2)
+        tgt = self.norm1(tgt)
+
+        # Multi-head attention handling inputs from the encoder (memory)
+        tgt2 = self.multihead_attn(tgt, memory, memory, attn_mask=memory_mask,
+                                   key_padding_mask=memory_key_padding_mask, is_causal=is_causal)[0]
+        tgt = tgt + self.dropout2(tgt2)
+        tgt = self.norm2(tgt)
+
+        tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
+        tgt = tgt + self.dropout3(tgt2)
+        tgt = self.norm3(tgt)
+
+        return tgt
 
 # MultiheadAttentionRPR
 class MultiheadAttentionRPR(Module):
@@ -153,7 +214,7 @@ class MultiheadAttentionRPR(Module):
             xavier_normal_(self.bias_v)
 
     def forward(self, query, key, value, key_padding_mask=None,
-                need_weights=True, attn_mask=None):
+                need_weights=True, attn_mask=None,is_causal=False):
 
         if hasattr(self, '_qkv_same_embed_dim') and self._qkv_same_embed_dim is False:
             # return F.multi_head_attention_forward(
@@ -176,7 +237,7 @@ class MultiheadAttentionRPR(Module):
                 key_padding_mask=key_padding_mask, need_weights=need_weights,
                 attn_mask=attn_mask, use_separate_proj_weight=True,
                 q_proj_weight=self.q_proj_weight, k_proj_weight=self.k_proj_weight,
-                v_proj_weight=self.v_proj_weight, rpr_mat=self.Er)
+                v_proj_weight=self.v_proj_weight, rpr_mat=self.Er, is_causal=is_causal)
         else:
             if not hasattr(self, '_qkv_same_embed_dim'):
                 warnings.warn('A new version of MultiheadAttention module has been implemented. \
@@ -199,7 +260,7 @@ class MultiheadAttentionRPR(Module):
                 self.dropout, self.out_proj.weight, self.out_proj.bias,
                 training=self.training,
                 key_padding_mask=key_padding_mask, need_weights=need_weights,
-                attn_mask=attn_mask, rpr_mat=self.Er)
+                attn_mask=attn_mask, rpr_mat=self.Er, is_causal=is_causal)
 
 # multi_head_attention_forward_rpr
 def multi_head_attention_forward_rpr(query,                       # type: Tensor
@@ -225,7 +286,8 @@ def multi_head_attention_forward_rpr(query,                       # type: Tensor
                                  v_proj_weight=None,              # type: Optional[Tensor]
                                  static_k=None,                   # type: Optional[Tensor]
                                  static_v=None,                   # type: Optional[Tensor]
-                                 rpr_mat=None
+                                 rpr_mat=None,
+                                 is_causal=False,
                                  ):
     """
     ----------
