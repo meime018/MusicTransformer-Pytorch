@@ -14,17 +14,17 @@ from torch.nn.functional import linear, softmax, dropout
 
 # TransformerEncoderRPR
 class TransformerEncoderRPR(Module):
-    """
-    ----------
-    Author: Pytorch
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/transformer.html#TransformerEncoder
+    """TransformerEncoderRPR is a stack of N encoder layers
 
-    No modification. Copied here to ensure continued compatibility with other edits.
-    ----------
-    """
+    Args:
+        encoder_layer: an instance of the TransformerEncoderLayerRPR() class (required).
+        num_layers: the number of sub-encoder-layers in the encoder (required).
+        norm: the layer normalization component (optional).
 
+    Examples::
+        >>> encoder_layer = nn.TransformerEncoderLayerRPR(d_model, nhead)
+        >>> transformer_encoder = nn.TransformerEncoderRPR(encoder_layer, num_layers)
+    """
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(TransformerEncoderRPR, self).__init__()
         self.layers = _get_clones(encoder_layer, num_layers)
@@ -32,7 +32,16 @@ class TransformerEncoderRPR(Module):
         self.norm = norm
 
     def forward(self, src, mask=None, src_key_padding_mask=None,is_causal=None):
+        """Pass the input through the endocder layers in turn.
 
+        Args:
+            src: the sequnce to the encoder (required).
+            mask: the mask for the src sequence (optional).
+            src_key_padding_mask: the mask for the src keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
         output = src
         
         for i in range(self.num_layers):
@@ -46,18 +55,22 @@ class TransformerEncoderRPR(Module):
 
 # TransformerEncoderLayerRPR
 class TransformerEncoderLayerRPR(Module):
-    """
-    ----------
-    Author: Pytorch
-    Modified: Damon Gwinn
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/transformer.html#TransformerEncoderLayer
+    """TransformerEncoderLayerRPR is made up of self-attn and feedforward network.
+    This standard encoder layer is based on the paper "Attention Is All You Need".
+    Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez,
+    Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In Advances in
+    Neural Information Processing Systems, pages 6000-6010. Users may modify or implement
+    in a different way during application.
 
-    Modification to create and call custom MultiheadAttentionRPR
-    ----------
-    """
+    Args:
+        d_model: the number of expected features in the input (required).
+        nhead: the number of heads in the multiheadattention models (required).
+        dim_feedforward: the dimension of the feedforward network model (default=2048).
+        dropout: the dropout value (default=0.1).
 
+    Examples::
+        >>> encoder_layer = nn.TransformerEncoderLayerRPR(d_model, nhead)
+    """
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, er_len=None):
         super(TransformerEncoderLayerRPR, self).__init__()
         self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
@@ -72,6 +85,16 @@ class TransformerEncoderLayerRPR(Module):
         self.dropout2 = Dropout(dropout)
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None,is_causal=False):
+        """Pass the input through the endocder layer.
+
+        Args:
+            src: the sequnce to the encoder layer (required).
+            src_mask: the mask for the src sequence (optional).
+            src_key_padding_mask: the mask for the src keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
         src2 = self.self_attn(src, src, src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask,is_causal=is_causal)[0]
         src = src + self.dropout1(src2)
@@ -82,8 +105,16 @@ class TransformerEncoderLayerRPR(Module):
         return src
 
 class TransformerDecoderRPR(Module):
-    """
-    Transformer Decoder with Relative Position Representations (RPR)
+    """TransformerDecoderRPR is a stack of N decoder layers
+
+    Args:
+        decoder_layer: an instance of the TransformerDecoderLayerRPR() class (required).
+        num_layers: the number of sub-decoder-layers in the decoder (required).
+        norm: the layer normalization component (optional).
+
+    Examples::
+        >>> decoder_layer = nn.TransformerDecoderLayerRPR(d_model, nhead)
+        >>> transformer_decoder = nn.TransformerDecoderRPR(decoder_layer, num_layers)
     """
 
     def __init__(self, decoder_layer, num_layers, norm=None):
@@ -94,6 +125,19 @@ class TransformerDecoderRPR(Module):
 
     def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
                 tgt_key_padding_mask=None, memory_key_padding_mask=None):
+        """Pass the inputs (and mask) through the decoder layer in turn.
+
+        Args:
+            tgt: the sequence to the decoder (required).
+            memory: the sequnce from the last layer of the encoder (required).
+            tgt_mask: the mask for the tgt sequence (optional).
+            memory_mask: the mask for the memory sequence (optional).
+            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
+            memory_key_padding_mask: the mask for the memory keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
         output = tgt
 
         for layer in self.layers:
@@ -106,6 +150,22 @@ class TransformerDecoderRPR(Module):
         return output
 
 class TransformerDecoderLayerRPR(Module):
+    """TransformerDecoderLayerRPR is made up of self-attn, multi-head-attn and feedforward network.
+    This standard decoder layer is based on the paper "Attention Is All You Need".
+    Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez,
+    Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In Advances in
+    Neural Information Processing Systems, pages 6000-6010. Users may modify or implement
+    in a different way during application.
+
+    Args:
+        d_model: the number of expected features in the input (required).
+        nhead: the number of heads in the multiheadattention models (required).
+        dim_feedforward: the dimension of the feedforward network model (default=2048).
+        dropout: the dropout value (default=0.1).
+
+    Examples::
+        >>> decoder_layer = nn.TransformerDecoderLayerRPR(d_model, nhead)
+    """
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, er_len=None):
         super(TransformerDecoderLayerRPR, self).__init__()
         self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
@@ -124,6 +184,19 @@ class TransformerDecoderLayerRPR(Module):
 
     def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
                 tgt_key_padding_mask=None, memory_key_padding_mask=None, is_causal=False):
+        """Pass the inputs (and mask) through the decoder layer.
+
+        Args:
+            tgt: the sequence to the decoder layer (required).
+            memory: the sequnce from the last layer of the encoder (required).
+            tgt_mask: the mask for the tgt sequence (optional).
+            memory_mask: the mask for the memory sequence (optional).
+            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
+            memory_key_padding_mask: the mask for the memory keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
         # Self attention handles the inputs from the decoder itself
         tgt2 = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask, 
                               key_padding_mask=tgt_key_padding_mask, is_causal=is_causal)[0]
