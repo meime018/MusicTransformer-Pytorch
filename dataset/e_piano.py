@@ -62,9 +62,9 @@ class EPianoDataset(Dataset):
         raw_mid     = torch.tensor(pickle.load(i_stream), dtype=TORCH_LABEL_TYPE, device=cpu_device())
         i_stream.close()
 
-        x, tgt = process_midi(raw_mid, self.max_seq, self.random_seq)
+        x1, x2, tgt = process_midi(raw_mid, self.max_seq, self.random_seq)
 
-        return x, tgt
+        return x1,x2, tgt
 
 # process_midi
 def process_midi(raw_mid, max_seq, random_seq):
@@ -77,41 +77,31 @@ def process_midi(raw_mid, max_seq, random_seq):
     ----------
     """
 
-    x   = torch.full((max_seq, ), TOKEN_PAD, dtype=TORCH_LABEL_TYPE, device=cpu_device())
-    tgt = torch.full((max_seq, ), TOKEN_PAD, dtype=TORCH_LABEL_TYPE, device=cpu_device())
+    x1   = torch.full((max_seq, ), TOKEN_PAD, dtype=TORCH_LABEL_TYPE, device=cpu_device())
+    x2   = torch.full((max_seq, ), TOKEN_PAD, dtype=TORCH_LABEL_TYPE, device=cpu_device())
+    tgt = torch.full((max_seq + 1, ), TOKEN_PAD, dtype=TORCH_LABEL_TYPE, device=cpu_device())
 
     raw_len     = len(raw_mid)
-    full_seq    = max_seq + 1 # Performing seq2seq
+    full_seq    = max_seq * 3 
 
     if(raw_len == 0):
-        return x, tgt
+        return x1, x2, tgt
 
     if(raw_len < full_seq):
-        x[:raw_len]         = raw_mid
-        tgt[:raw_len-1]     = raw_mid[1:]
-        tgt[raw_len-1]      = TOKEN_END
+        x1[:raw_len//3]         = raw_mid[:raw_len//3] 
+        tgt[0]                  = TOKEN_START
+        tgt[1:raw_len//3+1]     = raw_mid[raw_len//3:raw_len//3*2]
+        x2[:raw_len//3]         = raw_mid[raw_len//3*2:raw_len//3*3]
     else:
-        # Randomly selecting a range
-        if(random_seq):
-            end_range = raw_len - full_seq
-            start = random.randint(SEQUENCE_START, end_range)
-
-        # Always taking from the start to as far as we can
-        else:
-            start = SEQUENCE_START
-
-        end = start + full_seq
-
-        data = raw_mid[start:end]
-
-        x = data[:max_seq]
-        tgt = data[1:full_seq]
-
+        x1[:]                   = raw_mid[:max_seq]
+        tgt[0]                  = TOKEN_START
+        tgt[1:max_seq+1]        = raw_mid[max_seq:max_seq*2]
+        x2[:]                   = raw_mid[max_seq*2:max_seq*3]
 
     # print("x:",x)
     # print("tgt:",tgt)
 
-    return x, tgt
+    return x1, x2, tgt
 
 
 # create_epiano_datasets

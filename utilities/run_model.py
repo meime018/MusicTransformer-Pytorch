@@ -25,13 +25,14 @@ def train_epoch(cur_epoch, model, dataloader, loss, opt, lr_scheduler=None, prin
 
         opt.zero_grad()
 
-        x   = batch[0].to(get_device())
-        tgt = batch[1].to(get_device())
+        x1   = batch[0].to(get_device())
+        x2   = batch[1].to(get_device())
+        tgt = batch[2].to(get_device())
 
-        y = model(x)
+        y = model(x1,tgt[:,:-1])
 
         y   = y.reshape(y.shape[0] * y.shape[1], -1)
-        tgt = tgt.flatten()
+        tgt = tgt[:,1:].flatten()
 
         out = loss.forward(y, tgt)
 
@@ -75,11 +76,13 @@ def eval_model(model, dataloader, loss):
         sum_loss   = 0.0
         sum_acc    = 0.0
         for batch in dataloader:
-            x   = batch[0].to(get_device())
-            tgt = batch[1].to(get_device())
+            x1   = batch[0].to(get_device())
+            x2   = batch[1].to(get_device())
+            tgt = batch[2].to(get_device())
 
-            y = model(x)
-
+            y = model(x1,tgt[:,:-1])
+            tgt = tgt[:,1:]
+            
             sum_acc += float(compute_epiano_accuracy(y, tgt))
 
             y   = y.reshape(y.shape[0] * y.shape[1], -1)

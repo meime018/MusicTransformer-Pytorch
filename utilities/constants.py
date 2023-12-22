@@ -1,6 +1,7 @@
 import torch
 
-from third_party.midi_processor.processor import RANGE_NOTE_ON, RANGE_NOTE_OFF, RANGE_VEL, RANGE_TIME_SHIFT
+# from third_party.midi_processor.processor import RANGE_NOTE_ON, RANGE_NOTE_OFF, RANGE_VEL, RANGE_TIME_SHIFT
+#from miditok.constants import PITCH_RANGE, SPECIAL_TOKENS, BEAT_RES, NB_VELOCITIES, NB_TEMPOS, TEMPO_RANGE, TOKENIZER_PARAMS
 
 SEPERATOR               = "========================="
 
@@ -15,10 +16,12 @@ SCHEDULER_WARMUP_STEPS  = 4000
 
 # DROPOUT_P               = 0.1
 
-TOKEN_END               = RANGE_NOTE_ON + RANGE_NOTE_OFF + RANGE_VEL + RANGE_TIME_SHIFT
-TOKEN_PAD               = TOKEN_END + 1
+TOKEN_PAD               = 0
+TOKEN_MASK              = 1
+TOKEN_START             = 2
+TOKEN_END               = 3
 
-VOCAB_SIZE              = TOKEN_PAD + 1
+VOCAB_SIZE              = 201
 
 TORCH_FLOAT             = torch.float32
 TORCH_INT               = torch.int32
