@@ -47,8 +47,11 @@ class MusicTransformer(nn.Module):
         self.positional_encoding = PositionalEncoding(self.d_model, self.dropout, self.max_seq)
 
         encoder_norm = LayerNorm(self.d_model)
-        encoder_layer = TransformerEncoderLayerRPR(self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.max_seq)
-        self.encoder = TransformerEncoderRPR(encoder_layer, self.nlayers, encoder_norm)
+        encoder1_layer = TransformerEncoderLayerRPR(self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.max_seq)
+        self.encoder1 = TransformerEncoderRPR(encoder1_layer, self.nlayers, encoder_norm)
+
+        encoder2_layer = TransformerEncoderLayerRPR(self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.max_seq)
+        self.encoder2 = TransformerEncoderRPR(encoder2_layer, self.nlayers, encoder_norm)
 
         self.decoder_layer = TransformerDecoderLayerRPR(d_model=self.d_model, nhead=self.nhead, dim_feedforward=self.d_ff, dropout=self.dropout)
         self.decoder = TransformerDecoderRPR(self.decoder_layer, num_layers=self.nlayers, norm=encoder_norm)
@@ -59,7 +62,7 @@ class MusicTransformer(nn.Module):
         self.softmax    = nn.Softmax(dim=-1)
 
     # forward
-    def forward(self, x, tgt, mask=True):
+    def forward(self, x1, x2, tgt, mask=True):
         """
         ----------
         Author: Damon Gwinn
@@ -75,19 +78,23 @@ class MusicTransformer(nn.Module):
         else:
             mask = None
 
-        x = self.embedding(x)
+        x1 = self.embedding(x1)
+        x2 = self.embedding(x2)
         tgt = self.embedding(tgt)
         # Input shape is (max_seq, batch_size, d_model)
-        x = x.permute(1,0,2)
+        x1 = x1.permute(1,0,2)
+        x2 = x2.permute(1,0,2)
         tgt = tgt.permute(1,0,2)
 
-        x = self.positional_encoding(x)
+        x1 = self.positional_encoding(x1)
+        x2 = self.positional_encoding(x2)
         tgt = self.positional_encoding(tgt)
 
         # Since there are no true decoder layers, the tgt is unused
         # Pytorch wants src and tgt to have some equal dims however
-        memory = self.encoder(src=x)
-        x_out = self.decoder(tgt=tgt, memory=memory, tgt_mask=mask)
+        memory1 = self.encoder1(src=x1)
+        memory2 = self.encoder2(src=x2)
+        x_out = self.decoder(tgt=tgt, memory1=memory1, memory2=memory2, tgt_mask=mask)
 
         # Back to (batch_size, max_seq, d_model)
         x_out = x_out.permute(1,0,2)

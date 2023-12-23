@@ -123,8 +123,8 @@ class TransformerDecoderRPR(Module):
         self.num_layers = num_layers
         self.norm = norm
 
-    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
-                tgt_key_padding_mask=None, memory_key_padding_mask=None):
+    def forward(self, tgt, memory1, memory2, tgt_mask=None, memory1_mask=None, memory2_mask=None,
+                tgt_key_padding_mask=None, memory1_key_padding_mask=None, memory2_key_padding_mask=None, is_causal=False):
         """Pass the inputs (and mask) through the decoder layer in turn.
 
         Args:
@@ -141,8 +141,8 @@ class TransformerDecoderRPR(Module):
         output = tgt
 
         for layer in self.layers:
-            output = layer(output, memory, tgt_mask, memory_mask, 
-                           tgt_key_padding_mask, memory_key_padding_mask)
+            output = layer(output, memory1, memory2, tgt_mask, memory1_mask, memory2_mask, 
+                           tgt_key_padding_mask, memory1_key_padding_mask, memory2_key_padding_mask, is_causal=is_causal)
 
         if self.norm:
             output = self.norm(output)
@@ -171,19 +171,21 @@ class TransformerDecoderLayerRPR(Module):
         self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
         self.multihead_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
         # Implementation of Feedforward model
-        self.linear1 = Linear(d_model, dim_feedforward)
+        self.linear1 = Linear(d_model*2, dim_feedforward)
         self.dropout = Dropout(dropout)
         self.linear2 = Linear(dim_feedforward, d_model)
 
         self.norm1 = LayerNorm(d_model)
         self.norm2 = LayerNorm(d_model)
         self.norm3 = LayerNorm(d_model)
+        self.norm4 = LayerNorm(d_model)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
+        self.dropout4 = Dropout(dropout)
 
-    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, 
-                tgt_key_padding_mask=None, memory_key_padding_mask=None, is_causal=False):
+    def forward(self, tgt, memory1, memory2, tgt_mask=None, memory1_mask=None, memory2_mask=None, 
+                tgt_key_padding_mask=None, memory1_key_padding_mask=None, memory2_key_padding_mask=None, is_causal=False):
         """Pass the inputs (and mask) through the decoder layer.
 
         Args:
@@ -204,14 +206,23 @@ class TransformerDecoderLayerRPR(Module):
         tgt = self.norm1(tgt)
 
         # Multi-head attention handling inputs from the encoder (memory)
-        tgt2 = self.multihead_attn(tgt, memory, memory, attn_mask=memory_mask,
-                                   key_padding_mask=memory_key_padding_mask, is_causal=is_causal)[0]
-        tgt = tgt + self.dropout2(tgt2)
-        tgt = self.norm2(tgt)
+        tgt3 = self.multihead_attn(tgt, memory1, memory1, attn_mask=memory1_mask,
+                                   key_padding_mask=memory1_key_padding_mask, is_causal=is_causal)[0]
+        tgt3 = tgt + self.dropout2(tgt3)
+        tgt3 = self.norm2(tgt3)
 
-        tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
-        tgt = tgt + self.dropout3(tgt2)
-        tgt = self.norm3(tgt)
+        tgt4 = self.multihead_attn(tgt, memory2, memory2, attn_mask=memory2_mask,
+                                   key_padding_mask=memory2_key_padding_mask, is_causal=is_causal)[0]
+        tgt4 = tgt + self.dropout3(tgt4)
+        tgt4 = self.norm3(tgt4)
+
+        combined_tgt = torch.cat([tgt3, tgt4], dim=-1)
+        # print("combined_tgt.shape:",combined_tgt.shape)
+        # print("tgt3.shape:",tgt3.shape)
+        # print("tgt4.shape:",tgt4.shape)
+        tgt2 = self.linear2(self.dropout(F.relu(self.linear1(combined_tgt))))
+        tgt = tgt + self.dropout4(tgt2)
+        tgt = self.norm4(tgt)
 
         return tgt
 

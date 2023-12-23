@@ -29,11 +29,18 @@ def train_epoch(cur_epoch, model, dataloader, loss, opt, lr_scheduler=None, prin
         x2   = batch[1].to(get_device())
         tgt = batch[2].to(get_device())
 
-        y = model(x1,tgt[:,:-1])
+        y = model(x1,x2,tgt[:,:-1])
 
         y   = y.reshape(y.shape[0] * y.shape[1], -1)
         tgt = tgt[:,1:].flatten()
-
+        y1 = out = torch.argmax(y, dim=-1)
+        print("train_y1:",y1)
+        print("train_tgt:",tgt)
+        correct_predictions = (y1 == tgt).sum()
+        # 计算正确率
+        accuracy = correct_predictions.float() / y1.size(0)
+        # 打印正确率
+        print("Accuracy:", accuracy.item())
         out = loss.forward(y, tgt)
 
         out.backward()
@@ -80,7 +87,7 @@ def eval_model(model, dataloader, loss):
             x2   = batch[1].to(get_device())
             tgt = batch[2].to(get_device())
 
-            y = model(x1,tgt[:,:-1])
+            y = model(x1,x2,tgt[:,:-1])
             tgt = tgt[:,1:]
             
             sum_acc += float(compute_epiano_accuracy(y, tgt))
