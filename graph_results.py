@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 RESULTS_FILE = "results.csv"
 EPOCH_IDX = 0
 LR_IDX = 1
+TRAIN_LOSS_IDX = 2
+TRAIN_ACC_IDX = 3
 EVAL_LOSS_IDX = 4
 EVAL_ACC_IDX = 5
 
@@ -58,8 +60,8 @@ def graph_results(input_dirs="./saved_models/results", output_dir=None, model_na
         for line in lines:
             epoch = line[EPOCH_IDX]
             lr = line[LR_IDX]
-            accuracy = line[EVAL_ACC_IDX]
-            loss = line[EVAL_LOSS_IDX]
+            accuracy = line[TRAIN_ACC_IDX]
+            loss = line[TRAIN_LOSS_IDX]
 
             if(int(epoch) >= epoch_start and int(epoch) < epoch_end):
                 accuracy_arr.append(float(accuracy))
