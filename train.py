@@ -113,7 +113,7 @@ def main():
         train_loss_func = SmoothCrossEntropyLoss(args.ce_smoothing, VOCAB_SIZE, ignore_index=TOKEN_PAD)
 
     ##### Optimizer #####
-    opt = Adam(model.parameters(), lr=lr, betas=(ADAM_BETA_1, ADAM_BETA_2), eps=ADAM_EPSILON)
+    opt = Adam(model.parameters(), lr=lr, betas=(ADAM_BETA_1, ADAM_BETA_2), eps=ADAM_EPSILON, weight_decay=0.0001)
 
     if(args.lr is None):
         lr_scheduler = LambdaLR(opt, lr_stepper.step)
