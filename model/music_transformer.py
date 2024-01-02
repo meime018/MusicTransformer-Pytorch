@@ -46,15 +46,17 @@ class MusicTransformer(nn.Module):
         # Positional encoding
         self.positional_encoding = PositionalEncoding(self.d_model, self.dropout, self.max_seq)
 
-        encoder_norm = LayerNorm(self.d_model)
+        encoder1_norm = LayerNorm(self.d_model)
         encoder1_layer = TransformerEncoderLayerRPR(self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.max_seq)
-        self.encoder1 = TransformerEncoderRPR(encoder1_layer, self.nlayers, encoder_norm)
+        self.encoder1 = TransformerEncoderRPR(encoder1_layer, self.nlayers, encoder1_norm)
 
+        encoder2_norm = LayerNorm(self.d_model)
         encoder2_layer = TransformerEncoderLayerRPR(self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.max_seq)
-        self.encoder2 = TransformerEncoderRPR(encoder2_layer, self.nlayers, encoder_norm)
+        self.encoder2 = TransformerEncoderRPR(encoder2_layer, self.nlayers, encoder2_norm)
 
+        decoder_norm = LayerNorm(self.d_model)
         self.decoder_layer = TransformerDecoderLayerRPR(d_model=self.d_model, nhead=self.nhead, dim_feedforward=self.d_ff, dropout=self.dropout)
-        self.decoder = TransformerDecoderRPR(self.decoder_layer, num_layers=self.nlayers, norm=encoder_norm)
+        self.decoder = TransformerDecoderRPR(self.decoder_layer, num_layers=self.nlayers, norm=decoder_norm)
 
 
         # Final output is a softmaxed linear layer
